@@ -1,0 +1,115 @@
+experiment_id: sep_motion_batchnorm_start_encoder
+experiment: motion_taming
+model_save_dir: data/models
+num_workers: 12
+max_frames: 5
+split: 0.5
+split_direction: samples
+loss: perceptual #reconstruction or perceptual
+watch_gradients: False
+
+codebook:
+  n_embed: 4096 #C*H*W
+  embed_dim: 32
+
+logging:
+  video: True
+  n_fvd_samples: 1000
+  n_samples: 20
+  bs_i3d: 8
+
+d_t:
+  disc_start: 75000000
+
+loss_weights:
+  l1: 0.2
+  l2: 0.5
+  kld: 0.0
+  vgg: 0.8
+  gan: 1.0
+
+latent_dimensions:
+  pq_latent_size: 32
+  pq_latent_dim: 8 # 64 x 3 x 3
+  # Double the size is the latent output of hamiltonian unet
+
+# Define networks architectures
+networks:
+  variational: True
+  dtype : "float"
+  start_encoder:
+    type: "standard"
+    hidden_conv_layers: 2
+    n_filters: [ 8, 12, 32 ]  # first + hidden
+    kernel_sizes: [ 3, 3, 3, 3]  # first + hidden + last
+    strides: [ 1, 2, 2, 2, 2]  # first + hidden + last
+    out_channels: 32 # TODO: Evaluate impact
+
+  motion_encoder:
+    blocks_per_layer: 2
+    ENC_M_channels: [ 4, 8, 8, 16, 32 ]
+    strides: [1, 2, 1, 2, 2]
+    z_dim: 2048
+    img_size: 64
+    do_reparameterization: False
+    num_groups: 4
+
+  transformer:
+    z_channels: 32
+
+  unet:
+    out_channels: 64 #32
+    final_conv: False
+    #input_size: 32
+    #hidden_sizes: 32
+    #kernel_sizes: 1
+    #n_layers: 2
+
+  decoder:
+    n_residual_blocks: 3
+    n_filters: [32, 16, 8]
+    kernel_sizes: [3, 3, 3, 3]
+    include_spade: True
+
+# Define HGN Integrator torch.Size([2, 16, 9, 9]) torch.Size([2, 3, 72, 72]) torch.Size([1, 48, 72, 72]) torch.Size([1, 3, 72, 72])
+integrator:
+  method: "Leapfrog"
+
+# Define optimization
+optimization:
+  epochs: 20
+  precision: 32
+  batch_size: 12
+  input_frames: 10  # Number of frames to feed to the encoder while training
+  # Learning rates
+  hnn_lr: 1.5e-4
+  decoder_lr: 1.5e-4
+  frame_encoder_lr: 1.5e-4
+  motion_encoder_lr: 1.5e-4
+  codebook_lr: 1.5e-4
+  disc_t_lr: 1.5e-4
+  training_objective: 'posterior' # { prior, posterior }
+  gamma: 0.9 # scheduler
+  spade_frame_equals_previous: True
+  subsample_rollouts: False
+  feed_3_frames_to_motion_encoder: False
+  scheduled_sampling: True
+
+# Define data characteristics
+dataset:
+  datakeys: ['images'] #['sequence']
+  name: 'Bair'
+  aug: False
+  crop_to_size: 128
+  data_path_local: /home/sd/Documents/thesis/hgn_natural/data/bair/bair/
+  data_path: /export/scratch/compvis/datasets/bair/
+  img_size: 64
+  split: official
+  sequence_length: 20
+  spatial_size: !!python/tuple [64, 64]
+  radius_bound: 'auto'
+  rollout:
+    delta_time: 0.125
+    n_channels: 3
+    noise_level: 1  # Level of environment noise. 0 means no noise, 1 means max noise.
+                    # Maximum values are defined in each environment.

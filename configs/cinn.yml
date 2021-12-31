@@ -1,0 +1,99 @@
+experiment_id: sep_motion_batchnorm_start_encoder
+experiment: secondstage
+checkpoint_moitor: 'val/fvd_reconstruction'
+model_save_dir: data/models
+num_workers: 12
+max_frames: 5
+split: 0.5
+split_direction: samples
+loss: perceptual #reconstruction or perceptual
+watch_gradients: False
+first_stage_checkpoint: /export/compvis-nfs/user/sdetert/scratch/runs/restful-cosmos-1824/callback_checkpoints/epoch=91-step=132663.ckpt #important_checkpoints/swift-feather-1798/epoch=46-step=101660.ckpt #'/export/compvis-nfs/user/sdetert/scratch/runs/swift-feather-1798/callback_checkpoints/epoch=46-step=101660.ckpt'
+first_stage_config: /export/compvis-nfs/user/sdetert/scratch/runs/restful-cosmos-1824/callback_checkpoints/config.yml #important_checkpoints/swift-feather-1798/config.yml #'/export/compvis-nfs/user/sdetert/scratch/runs/swift-feather-1798/callback_checkpoints/config.yml'
+logging:
+  video: True
+  n_fvd_samples: 1000
+  n_samples: 20
+  bs_i3d: 8
+
+latent_dimensions:
+  pq_latent_size: 32
+  pq_latent_dim: 8 # 64 x 3 x 3
+  # Double the size is the latent output of hamiltonian unet
+
+# Define networks architectures
+networks:
+  inn:
+    conditional: True
+    type: 'SupervisedMacowTransformer' #'UnsupervisedConvTransformer' #'UnsupervisedMaCowTransformer3'
+    flow_in_channels: 32
+    flow_mid_channels_factor: 4
+    flow_hidden_depth: 2
+    scale: False
+    flow_p_drop: 0.
+    reshape: none
+    preproc: False
+    activation: "elu"
+
+    attention: False
+    flow_attn_heads: 4
+    kernel_size: [ 2,3 ]
+    coupling_type: "conv"
+    num_steps: [10, 5, 4, 4, 3, 3, 2, 2, 1, 1] # [10, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1]
+
+    flow_cdf_components: 4
+    factor: 16
+    factors: [ 4,4,4,4,4,4 ]
+    transform: "affine" #'relu' #
+    prior_transform: "affine" #'relu' #
+    condition_nice: False
+    augmented_input: False
+    augment_channels: 32
+    scale_augmentation: True
+    shift_augmentation: True
+    conv_coupling: False
+    cond_conv_hidden_channels: 8
+    h_channels: 8
+
+  condition_encoder:
+    freeze: False
+    use_start_frame_encoder: False
+    type: "standard"
+    hidden_conv_layers: 2
+    n_filters: [ 8, 12, 32]  # first + hidden
+    kernel_sizes: [ 3, 3, 3, 3, 3, 3  ]  # first + hidden + last
+    strides: [ 1, 2, 2, 2, 2, 2, 2 ]  # first + hidden + last
+    out_channels: 8 # TODO: Evaluate impact
+
+# Define optimization
+optimization:
+  epochs: 50
+  precision: 32
+  batch_size: 70 # 60
+  input_frames: 10  # Number of frames to feed to the encoder while training
+  # Learning rates
+  inn_lr: 1.5e-3
+  gamma: 0.9 # scheduler
+  weight_decay: 0.00001
+  training_objective: 'prior'
+
+
+# Define data characteristics
+dataset:
+  datakeys: ['images'] #['sequence']
+  name: 'Bair'
+  aug: False
+  crop_to_size: 128
+  data_path_local: /home/sd/Documents/thesis/hgn_natural/data/bair/bair/
+  data_path: /export/scratch/compvis/datasets/bair/
+  img_size: 64
+  split: official
+  sequence_length: 11
+  spatial_size: !!python/tuple [64, 64]
+  radius_bound: 'auto'
+  normalize: True
+  rollout:
+    delta_time: 1
+    n_channels: 3
+    noise_level: 1  # Level of environment noise. 0 means no noise, 1 means max noise.
+                    # Maximum values are defined in each environment.

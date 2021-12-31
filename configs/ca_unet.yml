@@ -1,0 +1,113 @@
+experiment_id: sep_motion_batchnorm_start_encoder
+experiment: stochasticmotion
+predictor: CA
+model_save_dir: data/models
+num_workers: 32
+max_frames: 5
+split: 0.5
+split_direction: samples
+watch_gradients: False
+logging:
+  video: True
+  n_fvd_samples: 1000
+  n_samples: 20
+  bs_i3d: 8
+
+loss_weights:
+  l1: 1
+  vgg: 1
+  gan: 0
+  q_latent: 0
+  p_codebook: 0.
+  disc_iter_start: 300000
+  enable_adversarial: False
+
+latent_dimensions:
+  pq_latent_size: 64
+  pq_latent_dim: 8 # 64 x 3 x 3
+  # Double the size is the latent output of hamiltonian unet
+# Define networks architectures
+networks:
+  variational: True
+  dtype : "float"
+  start_encoder:
+    type: "standard"
+    hidden_conv_layers: 2
+    n_filters: [ 12, 32, 64 ]  # first + hidden
+    kernel_sizes: [ 3, 3, 3, 3, 3]  # first + hidden + last
+    strides: [ 1, 2, 2, 2, 2]  # first + hidden + last
+    out_channels: 64
+
+  context_encoder:
+    type: "standard"
+    hidden_conv_layers: 2
+    n_filters: [ 8, 12, 32 ]  # first + hidden
+    kernel_sizes: [ 3, 3, 3, 3, 3]  # first + hidden + last
+    strides: [ 1, 2, 2, 2, 2]  # first + hidden + last
+    out_channels: 64
+
+  motion_encoder:
+    blocks_per_layer: 2
+    ENC_M_channels: [ 8, 16, 32, 64, 128 ] #[ 4, 8, 8, 16, 32 ]
+    strides: [ 1, 2, 2, 1, 1 ]
+    z_dim: 4096
+    img_size: 64
+    out_channels: 64
+    do_reparameterization: False
+    num_groups: [2, 4, 8, 16, 32]
+
+  oaiunet:
+    image_size: !!python/tuple [8, 8]
+    model_channels: 64
+    num_res_blocks: 4
+    attention_resolutions: [4] #[1, 2, 4, 8]
+
+  decoder:
+    n_residual_blocks: 3
+    n_filters: [32, 16, 8]
+    kernel_sizes: [3, 3, 3]
+
+# Define optimization
+optimization:
+  epochs: 50
+  precision: 32
+  batch_size: 24
+  test_batch_size: 24
+  input_frames: 10  # Number of frames to feed to the encoder while training
+  # Learning rates
+  hnn_lr: 1.5e-4
+  decoder_lr: 1.5e-4
+  frame_encoder_lr: 1.5e-4
+  motion_encoder_lr: 1.5e-4
+  codebook_lr: 1.5e-4
+  disc_t_lr: 1.5e-4
+  integrator_lr: 1.5e-4
+  training_objective: 'prior' # { prior, posterior }
+  gamma: 0.9 # scheduler
+  spade_frame_equals_previous: False
+  weight_decay: 0.0001
+  scheduled_sampling: False
+  detach_previous_frame_and_q: False
+  use_integrated_q_instead_of_encoded: True
+  use_scheduler: False
+  #disc_iter_start: 5000
+  #enable_adversarial: True
+
+# Define data characteristics
+dataset:
+  datakeys: ['images'] #['sequence']
+  name: 'Bair'
+  aug: False
+  crop_to_size: 128
+  data_path_local: /home/sd/Documents/thesis/hgn_natural/data/bair/bair/
+  data_path: /export/scratch/compvis/datasets/bair/
+  img_size: 64
+  split: official
+  sequence_length: 10
+  spatial_size: !!python/tuple [64, 64]
+  radius_bound: 'auto'
+  rollout:
+    delta_time: 1
+    n_channels: 3
+    noise_level: 1  # Level of environment noise. 0 means no noise, 1 means max noise.
+                    # Maximum values are defined in each environment.
